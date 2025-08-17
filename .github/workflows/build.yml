@@ -13,9 +13,8 @@ jobs:
     env:
       ANDROIDAPI: 33
       ANDROIDMINAPI: 21
-      ANDROIDNDK: 25b
       ANDROIDSDK_ROOT: $HOME/android-sdk
-      PATH: $HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-sdk/platform-tools:$PATH
+      ANDROIDNDK: $HOME/android-sdk/ndk/25.2.9519653
 
     steps:
       - name: Checkout repo
@@ -26,10 +25,11 @@ jobs:
         with:
           python-version: 3.10
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt update
-          sudo apt install -y python3-pip openjdk-11-jdk zip unzip git wget curl build-essential libncurses5 libncursesw5
+          sudo apt install -y python3-pip openjdk-11-jdk zip unzip git wget curl build-essential \
+          libncurses5 libncursesw5 zlib1g-dev
           pip install --upgrade pip buildozer cython
 
       - name: Setup Android SDK & NDK
@@ -37,15 +37,26 @@ jobs:
           mkdir -p $HOME/android-sdk/cmdline-tools
           cd $HOME/android-sdk/cmdline-tools
           wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
-          unzip cmdline-tools.zip
+          unzip -q cmdline-tools.zip
           mv cmdline-tools latest
-          yes | sdkmanager --sdk_root=$HOME/android-sdk "platform-tools" "platforms;android-33" "build-tools;34.0.0" "ndk;25.2.9519653" "cmake;3.22.1" "cmdline-tools;latest"
+          export ANDROID_HOME=$HOME/android-sdk
+          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
+          yes | sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "platforms;android-33" \
+            "build-tools;34.0.0" "ndk;25.2.9519653" "cmake;3.22.1" "cmdline-tools;latest"
+
+      - name: Verify build-tools and NDK
+        run: |
+          echo "Check if aidl exists:"
+          ls $HOME/android-sdk/build-tools/34.0.0/aidl
+          echo "Check if NDK exists:"
+          ls $HOME/android-sdk/ndk/25.2.9519653
 
       - name: Build APK with Buildozer
         run: |
           export ANDROIDSDK=$HOME/android-sdk
           export ANDROIDNDK=$HOME/android-sdk/ndk/25.2.9519653
-          buildozer android debug
+          export PATH=$ANDROIDSDK/cmdline-tools/latest/bin:$ANDROIDSDK/platform-tools:$PATH
+          buildozer android debug -v
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
