@@ -1,35 +1,52 @@
-[app]
-title = My Application
-package.name = myapp
-package.domain = org.test
-source.dir = .
-source.include_exts = py,png,jpg,kv,atlas
-version = 0.1
-requirements = python3,kivy
-orientation = portrait
-fullscreen = 0
-android.archs = arm64-v8a, armeabi-v7a
-log_level = 2
-warn_on_root = 1
+name: Build APK
 
-[buildozer]
-# Storage directories
-build_dir = ./.buildozer
-bin_dir = ./bin
-sudo apt update
-sudo apt install -y git zip unzip openjdk-17-jdk wget python3-pip python3-setuptools build-essential
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
-# Install buildozer and cython
-python3 -m pip install --upgrade pip
-python3 -m pip install buildozer cython
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    env:
+      ANDROIDAPI: 33
+      ANDROIDMINAPI: 21
+      ANDROIDNDK: 25b
 
-# Initialize buildozer
-buildozer init
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-# Optional: If AIDL error shows, install extra dependencies
-sudo apt install -y libc6:i386 libncurses5 libstdc++6 lib32z1 libbz2-1.0:i386
-# Clean previous build (optional)
-buildozer android clean
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.10
 
-# Build debug APK
-buildozer android debug
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y python3-pip openjdk-11-jdk zip unzip git wget curl build-essential
+          pip install --upgrade pip buildozer cython
+
+      - name: Setup Android SDK & NDK
+        run: |
+          mkdir -p $HOME/android-sdk/cmdline-tools
+          cd $HOME/android-sdk/cmdline-tools
+          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
+          unzip cmdline-tools.zip
+          mv cmdline-tools latest
+          export ANDROID_HOME=$HOME/android-sdk
+          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
+          yes | sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "platforms;android-33" "build-tools;34.0.0" "ndk;25.2.9519653" "cmake;3.22.1"
+
+      - name: Build APK with Buildozer
+        run: |
+          buildozer android debug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyApp-APK
+          path: bin/*.apk
